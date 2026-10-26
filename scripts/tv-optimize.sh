@@ -62,6 +62,8 @@ is_protected() {
 installed()  { adb_sh pm list packages    | sed 's/^package://'; }
 enabled()    { adb_sh pm list packages -e | sed 's/^package://'; }
 disabled()   { adb_sh pm list packages -d | sed 's/^package://'; }
+# Есть в прошивке, но удалены для пользователя (pm uninstall --user 0).
+uninstalled(){ comm -23 <(adb_sh pm list packages -u | sed 's/^package://' | sort) <(installed | sort); }
 third_party(){ adb_sh pm list packages -3 | sed 's/^package://'; }
 
 confirm() {
@@ -221,17 +223,25 @@ cmd_launcher() {
 
 cmd_restore() {
   require_device
-  local off pkg sf
-  off="$(disabled)"; sf="$(state_file)"
+  local off gone pkg sf candidates
+  sf="$(state_file)"
   confirm "Включить обратно все отключённые этим скриптом пакеты и сбросить настройки?" || return 0
+  candidates="$(
+    read_list "$LISTS/safe.txt"; read_list "$LISTS/optional.txt"
+    echo "$STOCK_LAUNCHER"
+    if [[ -f "$sf" ]]; then cat "$sf"; fi
+  )"
+  # Сначала возвращаем удалённые для пользователя: после установки пакет может остаться отключённым.
+  gone="$(uninstalled)"
+  while read -r pkg; do
+    grep -qxF "$pkg" <<<"$gone" || continue
+    adb_sh cmd package install-existing --user 0 "$pkg" >/dev/null && echo "  возвращён: $pkg"
+  done <<<"$candidates"
+  off="$(disabled)"
   while read -r pkg; do
     grep -qxF "$pkg" <<<"$off" || continue
     adb_sh pm enable --user 0 "$pkg" >/dev/null && echo "  включён: $pkg"
-  done < <(
-    read_list "$LISTS/safe.txt"; read_list "$LISTS/optional.txt"
-    echo "$STOCK_LAUNCHER"
-    [[ -f "$sf" ]] && cat "$sf"
-  )
+  done <<<"$candidates"
   rm -f "$sf"
   adb_sh cmd package set-home-activity --user 0 "$(home_activity "$STOCK_LAUNCHER")" >/dev/null || true
   local key

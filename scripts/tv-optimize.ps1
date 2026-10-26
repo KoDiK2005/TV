@@ -177,10 +177,18 @@ switch ($Command) {
     "restore" {
         Require-Device
         if (-not (Confirm "Включить обратно все отключённые этим скриптом пакеты и сбросить настройки?")) { break }
-        $off = Packages "-d"; $sf = State-File
+        $sf = State-File
         $candidates = @(Read-List "safe") + @(Read-List "optional") + @($StockLauncher)
         if (Test-Path $sf) { $candidates += Get-Content $sf }
-        $candidates | Select-Object -Unique | Where-Object { $off -contains $_ } | ForEach-Object {
+        $candidates = $candidates | Select-Object -Unique
+        # Сначала возвращаем удалённые для пользователя: после установки пакет может остаться отключённым.
+        $present = Packages ""
+        $gone = Packages "-u" | Where-Object { $present -notcontains $_ }
+        $candidates | Where-Object { $gone -contains $_ } | ForEach-Object {
+            Shell cmd package install-existing --user 0 $_ | Out-Null; Write-Host "  возвращён: $_"
+        }
+        $off = Packages "-d"
+        $candidates | Where-Object { $off -contains $_ } | ForEach-Object {
             Shell pm enable --user 0 $_ | Out-Null; Write-Host "  включён: $_"
         }
         if (Test-Path $sf) { Remove-Item $sf }

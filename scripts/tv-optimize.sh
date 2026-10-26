@@ -190,6 +190,12 @@ cmd_dns() {
   fi
 }
 
+# HOME-активность пакета, например com.spocky.projengmenu/.ui.home.MainActivity.
+home_activity() {
+  adb_sh cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME \
+    | sed 's/^[[:space:]]*//' | grep -m1 "^$1/" || true
+}
+
 cmd_launcher() {
   require_device
   local all alt="" pkg
@@ -202,8 +208,15 @@ cmd_launcher() {
   echo "Стандартный лаунчер ($STOCK_LAUNCHER) с рекламными рядами будет отключён, кнопка Home откроет $alt."
   confirm "Продолжить?" || { echo "Отменено."; return; }
   disable_pkg "$STOCK_LAUNCHER" --force
+  # Назначаем лаунчер по умолчанию: иначе ТВ покажет выбор (например, с ru.haier.evo).
+  local home
+  home="$(home_activity "$alt")"
+  if [[ -n "$home" ]] && adb_sh cmd package set-home-activity --user 0 "$home" | grep -q Success; then
+    echo "Лаунчер по умолчанию: $home"
+  else
+    echo "Если на ТВ появится выбор лаунчера — выберите $alt и «Всегда»."
+  fi
   adb_sh am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null || true
-  echo "Если на ТВ появится выбор лаунчера — выберите $alt и «Всегда»."
 }
 
 cmd_restore() {
@@ -220,6 +233,7 @@ cmd_restore() {
     [[ -f "$sf" ]] && cat "$sf"
   )
   rm -f "$sf"
+  adb_sh cmd package set-home-activity --user 0 "$(home_activity "$STOCK_LAUNCHER")" >/dev/null || true
   local key
   for key in window_animation_scale transition_animation_scale animator_duration_scale; do
     adb_sh settings put global "$key" 1

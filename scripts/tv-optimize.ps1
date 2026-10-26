@@ -52,6 +52,12 @@ function Packages($flag) {
 
 function Confirm($question) { (Read-Host "$question [y/N]") -match "^[YyДд]$" }
 
+# HOME-активность пакета, например com.spocky.projengmenu/.ui.home.MainActivity.
+function Home-Activity($pkg) {
+    Shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME |
+        ForEach-Object { $_.Trim() } | Where-Object { $_.StartsWith("$pkg/") } | Select-Object -First 1
+}
+
 function State-File {
     $serial = (& $Adb get-serialno).Trim() -replace "[:/]", "_"
     Join-Path $StateDir "disabled-$serial.txt"
@@ -159,8 +165,14 @@ switch ($Command) {
         Write-Host "Стандартный лаунчер ($StockLauncher) с рекламными рядами будет отключён, кнопка Home откроет $alt."
         if (-not (Confirm "Продолжить?")) { Write-Host "Отменено."; break }
         Disable-Pkg $StockLauncher -Force
+        # Назначаем лаунчер по умолчанию: иначе ТВ покажет выбор (например, с ru.haier.evo).
+        $altHome = Home-Activity $alt
+        if ($altHome -and ((Shell cmd package set-home-activity --user 0 $altHome) -match "Success")) {
+            Write-Host "Лаунчер по умолчанию: $altHome"
+        } else {
+            Write-Host "Если на ТВ появится выбор лаунчера — выберите $alt и «Всегда»."
+        }
         Shell am start -a android.intent.action.MAIN -c android.intent.category.HOME | Out-Null
-        Write-Host "Если на ТВ появится выбор лаунчера — выберите $alt и «Всегда»."
     }
     "restore" {
         Require-Device
@@ -172,6 +184,8 @@ switch ($Command) {
             Shell pm enable --user 0 $_ | Out-Null; Write-Host "  включён: $_"
         }
         if (Test-Path $sf) { Remove-Item $sf }
+        $stockHome = Home-Activity $StockLauncher
+        if ($stockHome) { Shell cmd package set-home-activity --user 0 $stockHome | Out-Null }
         $AnimKeys | ForEach-Object { Shell settings put global $_ 1 | Out-Null }
         Shell settings put global private_dns_mode off | Out-Null
         Write-Host "Готово. Перезагрузите ТВ: adb reboot"

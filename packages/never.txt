@@ -1,0 +1,21 @@
+# Защищённые пакеты: скрипт откажется их отключать, даже если их добавить в другие списки
+# (ТВ может перестать загружаться, пропадёт эфир, пульт или Маркет).
+# Строка, оканчивающаяся на *, — префикс.
+android
+com.android.systemui
+com.android.tv.settings                # Настройки
+com.android.vending                    # Play Маркет
+com.android.shell
+com.android.packageinstaller
+com.android.providers.*
+com.android.inputmethod.*
+com.google.android.gms
+com.google.android.gsf
+com.google.android.packageinstaller
+com.google.android.tvlauncher          # стандартный лаунчер — только через команду launcher
+com.google.android.tv.remote.service   # пульт / пульт с телефона
+com.google.android.tungsten.setupwraith
+com.google.android.leanback.ime        # клавиатура
+com.google.android.youtube.tv
+com.mediatek.*                         # эфирное ТВ, источники HDMI, картинка
+com.haier.*                            # системные приложения Haier — только вручную после scan

@@ -1,0 +1,7 @@
+# По желанию: отключайте только то, чем не пользуетесь. Скрипт спросит про каждый пакет.
+com.google.android.tvrecommendations   # Рекомендации/рекламные ряды на главном экране
+com.google.android.backdrop            # Ambient-режим (заставка с фото и погодой)
+com.google.android.apps.mediashell     # Chromecast (трансляция с телефона)
+com.google.android.katniss             # Голосовой поиск / Ассистент (кнопка микрофона перестанет работать)
+com.netflix.ninja                      # Netflix
+com.amazon.amazonvideo.livingroom      # Prime Video

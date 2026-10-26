@@ -1,0 +1,11 @@
+# Безопасно отключать: на работу ТВ, эфир (DVB), YouTube и Play Маркет не влияют.
+# Формат: <пакет>  # комментарий
+com.google.android.play.games          # Google Play Игры
+com.google.android.videos              # Google Play Фильмы / Google TV
+com.google.android.youtube.tvmusic     # YouTube Music
+com.google.android.feedback            # Отправка отзывов в Google
+com.google.android.tv.bugreportsender  # Отправка баг-репортов
+com.android.printspooler               # Печать (на ТВ не нужна)
+com.android.bips                       # Встроенная служба печати
+com.android.dreams.basic               # Заставка «Цвета»
+com.android.dreams.phototable          # Заставка «Фотостол»

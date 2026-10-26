@@ -1,6 +1,6 @@
 ﻿# Оптимизация Android TV (Haier DVB2K, Android TV 11) через ADB без root — версия для Windows.
 # Запуск: powershell -ExecutionPolicy Bypass -File scripts\tv-optimize.ps1 <команда> [аргумент]
-# Команды те же, что у tv-optimize.sh: connect, info, scan, debloat, optional, disable, perf, dns, launcher, restore.
+# Команды те же, что у tv-optimize.sh: connect, info, scan, debloat, optional, disable, uninstall, perf, dns, launcher, restore.
 param([string]$Command = "help", [string]$Arg = "")
 
 $ErrorActionPreference = "Stop"
@@ -63,14 +63,19 @@ function State-File {
     Join-Path $StateDir "disabled-$serial.txt"
 }
 
+# Записывает пакет в state-файл, чтобы restore его вернул.
+function Remember($pkg) {
+    New-Item -ItemType Directory -Force $StateDir | Out-Null
+    $sf = State-File
+    if (-not ((Test-Path $sf) -and (Get-Content $sf) -contains $pkg)) { Add-Content $sf $pkg }
+}
+
 function Disable-Pkg($pkg, [switch]$Force) {
     if ((Is-Protected $pkg) -and -not $Force) { Write-Host "  пропущен (защищён, см. packages\never.txt): $pkg"; return }
     $out = Shell pm disable-user --user 0 $pkg
     if ("$out" -match "disabled") {
         Write-Host "  отключён: $pkg"
-        New-Item -ItemType Directory -Force $StateDir | Out-Null
-        $sf = State-File
-        if (-not ((Test-Path $sf) -and (Get-Content $sf) -contains $pkg)) { Add-Content $sf $pkg }
+        Remember $pkg
     } else { Write-Host "  не удалось отключить: $pkg" }
 }
 
@@ -133,6 +138,24 @@ switch ($Command) {
             Write-Host "Пакет $Arg в списке защищённых. Отключение может сломать эфир, пульт или загрузку ТВ."
             if (Confirm "Всё равно отключить? (вернуть: tv-optimize.ps1 restore)") { Disable-Pkg $Arg -Force }
         } else { Disable-Pkg $Arg }
+    }
+    "uninstall" {
+        # Удаление для пользователя (pm uninstall -k --user 0): файл остаётся в прошивке.
+        # Нужно для пакетов, которые отключение не останавливает: persistent-приложения
+        # (Android запускает их и отключёнными) и те, что прошивка включает обратно при загрузке.
+        Require-Device
+        if (-not $Arg) { Die "укажите пакет: tv-optimize.ps1 uninstall com.example.app" }
+        if ((Packages "") -notcontains $Arg) { Die "пакет $Arg не установлен" }
+        if (Is-Protected $Arg) {
+            Write-Host "Пакет $Arg в списке защищённых. Удаление может сломать эфир, пульт или загрузку ТВ."
+        }
+        Write-Host "Пакет $Arg будет удалён для пользователя (данные сохранятся). Вернуть: tv-optimize.ps1 restore"
+        if (-not (Confirm "Удалить?")) { Write-Host "Отменено."; break }
+        if ("$(Shell pm uninstall -k --user 0 $Arg)" -match "^Success") {
+            Write-Host "  удалён для пользователя: $Arg"
+            Remember $Arg
+            Write-Host "  Persistent-процесс остановится после перезагрузки: adb reboot"
+        } else { Write-Host "  не удалось удалить: $Arg" }
     }
     "perf" {
         Require-Device
@@ -208,6 +231,7 @@ switch ($Command) {
   debloat             отключить пакеты из packages\safe.txt (с подтверждением)
   optional            по одному спросить про пакеты из packages\optional.txt
   disable <пакет>     отключить конкретный пакет (например, найденный через scan)
+  uninstall <пакет>   удалить пакет для пользователя, если отключение не помогает
   perf                ускорить анимации (0.5x) и очистить кэш приложений
   dns [хост|off]      Private DNS для блокировки рекламы (по умолчанию dns.adguard-dns.com)
   launcher            перейти на альтернативный лаунчер (Projectivy / FLauncher / Wolf)

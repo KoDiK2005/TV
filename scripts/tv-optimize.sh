@@ -20,6 +20,7 @@ usage() {
   debloat             отключить пакеты из packages/safe.txt (с подтверждением)
   optional            по одному спросить про пакеты из packages/optional.txt
   disable <пакет>     отключить конкретный пакет (например, найденный через scan)
+  uninstall <пакет>   удалить пакет для пользователя, если отключение не помогает
   perf                ускорить анимации (0.5x) и очистить кэш приложений
   dns [хост|off]      Private DNS для блокировки рекламы (по умолчанию dns.adguard-dns.com)
   launcher            перейти на альтернативный лаунчер (Projectivy / FLauncher / Wolf)
@@ -72,6 +73,13 @@ confirm() {
   [[ "$answer" =~ ^[YyДд]$ ]]
 }
 
+# Записывает пакет в state-файл, чтобы restore его вернул.
+remember() {
+  mkdir -p "$STATE_DIR"
+  local sf; sf="$(state_file)"
+  grep -qxF "$1" "$sf" 2>/dev/null || echo "$1" >> "$sf"
+}
+
 disable_pkg() {
   local pkg="$1" force="${2:-}"
   if is_protected "$pkg" && [[ "$force" != "--force" ]]; then
@@ -80,9 +88,7 @@ disable_pkg() {
   fi
   if adb_sh pm disable-user --user 0 "$pkg" | grep -q 'disabled'; then
     echo "  отключён: $pkg"
-    mkdir -p "$STATE_DIR"
-    local sf; sf="$(state_file)"
-    grep -qxF "$pkg" "$sf" 2>/dev/null || echo "$pkg" >> "$sf"
+    remember "$pkg"
   else
     echo "  не удалось отключить: $pkg"
   fi
@@ -162,6 +168,27 @@ cmd_disable() {
     disable_pkg "$1" --force
   else
     disable_pkg "$1"
+  fi
+}
+
+# Удаление для пользователя (pm uninstall -k --user 0): файл остаётся в прошивке.
+# Нужно для пакетов, которые отключение не останавливает: persistent-приложения
+# (Android запускает их и отключёнными) и те, что прошивка включает обратно при загрузке.
+cmd_uninstall() {
+  require_device
+  [[ $# -ge 1 ]] || die "укажите пакет: $0 uninstall com.example.app"
+  grep -qxF "$1" <<<"$(installed)" || die "пакет $1 не установлен"
+  if is_protected "$1"; then
+    echo "Пакет $1 в списке защищённых. Удаление может сломать эфир, пульт или загрузку ТВ."
+  fi
+  echo "Пакет $1 будет удалён для пользователя (данные сохранятся). Вернуть: $0 restore"
+  confirm "Удалить?" || { echo "Отменено."; return 0; }
+  if adb_sh pm uninstall -k --user 0 "$1" | grep -q '^Success'; then
+    echo "  удалён для пользователя: $1"
+    remember "$1"
+    echo "  Persistent-процесс остановится после перезагрузки: $ADB reboot"
+  else
+    echo "  не удалось удалить: $1"
   fi
 }
 
@@ -261,6 +288,7 @@ main() {
     debloat)  cmd_debloat ;;
     optional) cmd_optional ;;
     disable)  cmd_disable "$@" ;;
+    uninstall) cmd_uninstall "$@" ;;
     perf)     cmd_perf ;;
     dns)      cmd_dns "$@" ;;
     launcher) cmd_launcher ;;
